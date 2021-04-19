@@ -1,38 +1,31 @@
-package com.anan.donis.server;
-
-
 import java.io.*;
 import java.math.BigInteger;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.security.MessageDigest;
+import java.util.Date;
 import java.util.concurrent.*;
 
 /**
  * @ClassName Server
- * @Description TODO
+ * @Description 图片服务器，用于接收上传的图片并存储到指定位置。参数一：监听的端口，参数二：指定的存储位置，
  * @Author don
  * @Date 2021-04-19 11:35
  * @Version 1.0
  */
-public class Server {
+public class ImageServer {
 
-    public static ThreadPoolExecutor scheduledExecutorService;
+    public static ThreadPoolExecutor threadPool;
 
     static {
-        scheduledExecutorService = (ThreadPoolExecutor) Executors.newScheduledThreadPool(10);
-        System.out.println("线程池创建了");
+        threadPool = (ThreadPoolExecutor) Executors.newScheduledThreadPool(10);
+        System.out.println( new Date().toString() + "：线程池创建成功");
     }
 
-    /**
-     *
-     * @param args args[0] = port
-     * @throws IOException
-     */
     public static void main(String[] args) throws IOException {
 
         ServerSocket serverSocket = new ServerSocket(Integer.parseInt(args[0]));
-        System.out.println("服务器开始监听2626");
+        System.out.println(new Date().toString() + "：服务器创建成功，开始监听 " + args[0] + "端口");
 
         while (true){
 
@@ -86,7 +79,8 @@ class ImageUploadCal implements Callable<String>{
 
         OutputStream outputStream = accept.getOutputStream();
         OutputStreamWriter outputStreamWriter = new OutputStreamWriter(outputStream);
-        outputStreamWriter.write(result);
+        String url = "http://don.anan.com/images/" + result + ".png";
+        outputStreamWriter.write(url);
         outputStreamWriter.flush();
         accept.shutdownOutput();
         accept.close();

@@ -1,4 +1,3 @@
-package com.anan.donis.client;
 
 import java.io.*;
 import java.net.InetAddress;
