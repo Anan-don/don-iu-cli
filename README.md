@@ -1,2 +1,3 @@
-# don-iu-cli
-An Image Upload Client.
+# donis-simple
+
+A Simple Image System based TCP Programming.
