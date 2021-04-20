@@ -5,6 +5,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Date;
 import java.util.Properties;
 import java.util.concurrent.*;
@@ -29,7 +30,7 @@ public class ImageServer {
     public static final int PORT;
 
     /**
-     * 图片的存储位置，默认是家目录下的images目录
+     * 图片的存储位置，默认是/usr/local/images目录
      */
     public static final String LOCATION;
 
@@ -43,36 +44,60 @@ public class ImageServer {
             throw new RuntimeException("配置文件没有找到，请将配置文件放到本程序所在目录下");
         }
         PORT = Integer.parseInt(properties.getProperty("port","8080"));
-        LOCATION = properties.getProperty("location","~/images/");
+        LOCATION = properties.getProperty("location","/usr/local/images");
+        File imagesDirectory = new File(LOCATION);
+        if (!imagesDirectory.exists() ){
+            if (imagesDirectory.mkdirs()){
+                System.out.println(LOCATION + "创建成功！！");
+            }else{
+                throw new RuntimeException(LOCATION + "创建失败，请重新启动服务器！！");
+            }
+        }
+
         try {
             HOST = properties.getProperty("host", InetAddress.getLocalHost().getHostAddress());
         } catch (UnknownHostException e) {
             throw new RuntimeException("默认ip地址失败，请自定义ip地址或域名");
         }
-        System.out.println( new Date().toString() + "：自定义配置加成功...");
+        System.out.println( new Date().toString() + "：自定义配置加载成功...");
 
     }
 
     /**
      * 一个固定线程数量的线程池。多线程操作，提高服务器的高可用。
      */
-    public static final ThreadPoolExecutor threadPool;
+    public static final ExecutorService threadPool;
 
     static {
-        threadPool = (ThreadPoolExecutor) Executors.newScheduledThreadPool(10);
+        threadPool = Executors.newScheduledThreadPool(10);
         System.out.println( new Date().toString() + "：线程池创建成功...");
     }
 
-    public static void main(String[] args) throws IOException {
+    /**
+     * 服务器程序入口
+     * @param args
+     */
+    public static void main(String[] args)  {
 
-        ServerSocket serverSocket = new ServerSocket(PORT);
+        ServerSocket serverSocket = null;
+        try {
+            serverSocket = new ServerSocket(PORT);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
         System.out.println(new Date().toString() + "：服务器创建成功，开始监听 " + PORT + "端口.......");
 
         while (true){
 
             //监听到客户端连接，创建连接
-            Socket client = serverSocket.accept();
+            Socket client = null;
+            try {
+                client = serverSocket.accept();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
             System.out.println(new Date().toString() + "：客户端ip：" +client.getInetAddress().getHostAddress() + "连接中....");
+            
             threadPool.submit(new ImageUploadCal(client,LOCATION,HOST));
 
         }
@@ -98,49 +123,61 @@ class ImageUploadCal implements Callable<String>{
         connetction = socket;
         this.localtion = localtion;
         host = ip;
-        System.out.println(new Date().toString() + "：子线程 " + Thread.currentThread().getName() + "已建立...");
     }
 
     @Override
-    public String call() throws Exception {
+    public String call()  {
 
-        MessageDigest md5 = MessageDigest.getInstance("MD5");
-        File file = new File(localtion,Thread.currentThread().getName() + ".png");
+        System.out.println(new Date().toString() + "：子线程 " + Thread.currentThread().getName() + "已建立...");
 
-        //接收图片
-        InputStream inputStream = connetction.getInputStream();
-        FileOutputStream fileOutputStream = new FileOutputStream(file);
+        String url = null;
+        try {
+            MessageDigest md5 = MessageDigest.getInstance("MD5");
+            File file = new File(localtion,Thread.currentThread().getName() + ".png");
 
-        int length = 0;
-        byte[] bytes = new byte[2048];
-        System.out.println(new Date().toString() + "：子线程 " + Thread.currentThread().getName() + "接收图片中...");
-        while ((length = inputStream.read(bytes)) != -1){
+            //接收图片
+            InputStream inputStream = connetction.getInputStream();
+            FileOutputStream fileOutputStream = new FileOutputStream(file);
 
-            fileOutputStream.write(bytes,0,length);
-            md5.update(bytes,0,length);
+            int length = 0;
+            byte[] bytes = new byte[2048];
+            System.out.println(new Date().toString() + "：子线程 " + Thread.currentThread().getName() + "接收图片中...");
+            while ((length = inputStream.read(bytes)) != -1){
 
+                fileOutputStream.write(bytes,0,length);
+                md5.update(bytes,0,length);
+
+            }
+
+            fileOutputStream.close();
+            connetction.shutdownInput();
+
+            //计算md5
+            byte[] digest = md5.digest();
+            BigInteger bigInteger = new BigInteger(1, digest);
+            String imageName = bigInteger.toString(16);
+
+            //图片存储
+            if (file.renameTo(new File(localtion, imageName + ".png"))){
+                System.out.println(new Date().toString() + "：子线程" + Thread.currentThread().getName() + "图片已存储到" + localtion + imageName +".png");
+            }else{
+                System.out.println(new Date().toString() + "：子线程" + Thread.currentThread().getName() + "图片存储失败");
+                connetction.close();
+            }
+
+            //发送外链
+            OutputStreamWriter outputStreamWriter = new OutputStreamWriter(connetction.getOutputStream());
+            url = "http://" + host + "/images/" + imageName + ".png";
+            outputStreamWriter.write(url);
+            outputStreamWriter.flush();
+            connetction.shutdownOutput();
+            connetction.close();
+
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
-
-        //计算md5
-        byte[] digest = md5.digest();
-        BigInteger bigInteger = new BigInteger(1, digest);
-        String imageName = bigInteger.toString(16);
-
-        fileOutputStream.close();
-
-        //图片存储
-        boolean rename = file.renameTo(new File(localtion, imageName + ".png"));
-        System.out.println(rename);
-        System.out.println(new Date().toString() + "：子线程" + Thread.currentThread().getName() + "图片已存储到" + localtion + imageName +".png");
-        connetction.shutdownInput();
-
-        //发送外链
-        OutputStreamWriter outputStreamWriter = new OutputStreamWriter(connetction.getOutputStream());
-        String url = "http://" + host + "/images/" + imageName + ".png";
-        outputStreamWriter.write(url);
-        outputStreamWriter.flush();
-        connetction.shutdownOutput();
-        connetction.close();
 
         System.out.println(new Date().toString() + "：子线程 " + Thread.currentThread().getName() + "结束任务...");
         return url;
