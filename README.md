@@ -79,6 +79,8 @@ serverconf.properties、clientconf.properties：自定义配置。
                  index index.html index.htm;
              }
      ```
+     - 注意：如果使用域名代替ip，并且域名没有备案，通过本地hosts文件解析域名和ip，则Nginx服务器端口不能指定为80.
+     - 因为：80端口默认提供web服务，而在中国会对请求进行审查，如果发现域名没有备案，则会拒绝访问。
 
    - 图片服务器提供图片访问功能。**未实现**。
 

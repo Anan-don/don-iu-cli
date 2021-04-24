@@ -1,6 +1,8 @@
 import java.io.*;
 import java.net.InetAddress;
+import java.net.MalformedURLException;
 import java.net.Socket;
+import java.net.URL;
 import java.util.Date;
 import java.util.Properties;
 
@@ -66,10 +68,17 @@ public class ImageUploadClient {
             }
 
             //获取第 i 张图片
-            FileInputStream fileInputStream = null;
+            InputStream fileInputStream = null;
             try {
-                fileInputStream = new FileInputStream(args[i]);
-            } catch (FileNotFoundException e) {
+
+                if ( args[i].startsWith("http") ){
+                    InputStream urlInputStream = new URL(args[i]).openStream();
+                    fileInputStream = urlInputStream;
+                }else {
+                    fileInputStream = new FileInputStream(args[i]);
+                }
+
+            } catch (IOException e) {
                 e.printStackTrace();
                 System.out.println(args[i] + "图片不存在,上传失败！");
                 continue;
@@ -135,4 +144,5 @@ public class ImageUploadClient {
             i++;
         }
     }
+    
 }
